@@ -78,4 +78,52 @@ object MetadataApi {
 
     /** iTunes + fallback Deezer. */
     fun search(query: String): Meta? = searchItunes(query) ?: searchDeezer(query)
+
+    /** Búsqueda con varios resultados para la pantalla "Agregar pistas". */
+    fun searchAll(query: String, limit: Int = 20): List<Meta> = searchItunesAll(query, limit)
+        .ifEmpty { searchDeezerAll(query, limit) }
+
+    private fun searchItunesAll(query: String, limit: Int): List<Meta> {
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val body = get("https://itunes.apple.com/search?term=$encoded&media=music&limit=$limit")
+            ?: return emptyList()
+        return try {
+            val results = JSONObject(body).optJSONArray("results") ?: return emptyList()
+            (0 until results.length()).mapNotNull { i ->
+                val r = results.optJSONObject(i) ?: return@mapNotNull null
+                val art = r.optString("artworkUrl100").replace("100x100", "600x600")
+                Meta(
+                    title = r.optString("trackName").ifBlank { null },
+                    artist = r.optString("artistName").ifBlank { null },
+                    artworkUrl = art.ifBlank { null },
+                    previewUrl = r.optString("previewUrl").ifBlank { null },
+                    durationMs = (r.optDouble("trackTimeMillis", 0.0)).toLong()
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun searchDeezerAll(query: String, limit: Int): List<Meta> {
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val body = get("https://api.deezer.com/search?q=$encoded&limit=$limit") ?: return emptyList()
+        return try {
+            val data = JSONObject(body).optJSONArray("data") ?: return emptyList()
+            (0 until data.length()).mapNotNull { i ->
+                val t = data.optJSONObject(i) ?: return@mapNotNull null
+                val album = t.optJSONObject("album") ?: JSONObject()
+                Meta(
+                    title = t.optString("title_short").ifBlank { null },
+                    artist = t.optJSONObject("artist")?.optString("name")?.ifBlank { null },
+                    artworkUrl = album.optString("cover_xl")
+                        .ifBlank { album.optString("cover_medium") }.ifBlank { null },
+                    previewUrl = t.optString("preview").ifBlank { null },
+                    durationMs = t.optLong("duration", 0L) * 1000L
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }

@@ -8,18 +8,17 @@ import com.mixcasete.app.data.db.TrackEntity
 import com.mixcasete.app.util.MetadataApi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
-import org.schabi.newpipe.extractor.StreamingService
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
-import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
-import org.schabi.newpipe.extractor.search.SearchExpressionCompiler
-import org.schabi.newpipe.extractor.search.SearchResult
+import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -44,25 +43,27 @@ data class ResolvedStream(
     val durationMs: Long
 )
 
-private class OkHttpDownloader : Downloader() {
+/** Downloader mínimo sobre HttpURLConnection para NewPipeExtractor. */
+private class HttpDownloader : Downloader() {
     override fun execute(request: Request): Response {
         val conn = URL(request.url()).openConnection() as HttpURLConnection
-        request.headers().forEach { (k, v) -> conn.setRequestProperty(k, v.joinToString("; ")) }
+        for ((k, v) in request.headers()) conn.setRequestProperty(k, v.joinToString("; "))
         conn.requestMethod = request.httpMethod()
         conn.connectTimeout = 15000
         conn.readTimeout = 15000
         conn.instanceFollowRedirects = false
-        val bodyOut = request.dataToPut()
-        if (bodyOut != null) {
+        val body = request.dataToSend()
+        if (body != null) {
             conn.doOutput = true
-            conn.outputStream.use { it.write(bodyOut) }
+            conn.outputStream.use { it.write(body) }
         }
         val code = conn.responseCode
-        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
             ?.bufferedReader()?.use { it.readText() } ?: ""
-        val headers = conn.headerFields.filterKeys { it != null }
-            .mapValues { it.value }
-        return Response(code, body, null, headers, request.url())
+        val headers = conn.headerFields
+            .filterKeys { it != null }
+            .mapValues { e -> e.value ?: listOf() }
+        return Response(code, text, null, headers, request.url())
     }
 }
 
@@ -73,7 +74,7 @@ class Repository @Inject constructor(
 ) {
     init {
         // Inicialización global del extractor (idempotente)
-        runCatching { NewPipe.init(OkHttpDownloader()) }
+        runCatching { NewPipe.init(HttpDownloader(), "all") }
     }
 
     // ---------------------------------------------------------------- Lista
@@ -124,46 +125,37 @@ class Repository @Inject constructor(
     // ---------------------------------------------------------------- Búsqueda
 
     /**
-     * Busca en YouTube vía NewPipeExtractor (búsqueda ligera, sin extraer cada video).
+     * Busca pistas usando las APIs de metadatos (iTunes primero, Deezer como respaldo),
+     * que devuelven título, artista, duración y carátula. El usuario crea sus listas;
+     * no se trae ninguna lista impuesta.
      */
     suspend fun search(query: String): List<SearchResultItem> = withContext(Dispatchers.IO) {
-        try {
-            val service: StreamingService = NewPipe.getService(NewPipe.getServiceId("youtube"))
-            val handler: ListLinkHandler = service.searchFactory.fromQueryFilter(query, "all")
-            val result: SearchResult = service.searchFactory
-                .getSearchResult(SearchExpressionCompiler.compileQuery(handler))
-            result.items.filterIsInstance<org.schabi.newpipe.extractor.stream.StreamInfoItem>()
-                .mapNotNull { item ->
-                    val vid = item.url.substringAfterLast("v=").substringBefore("&")
-                    if (vid.isBlank() || vid.length < 11) null
-                    else SearchResultItem(
-                        youtubeId = vid.take(11),
-                        title = item.name,
-                        artist = item.uploaderName,
-                        durationMs = item.duration * 1000L,
-                        artworkUrl = item.thumbnails.firstOrNull()?.url
-                    )
-                }
-                .take(25)
-        } catch (e: Exception) {
-            throw ExtractionException("Búsqueda fallida", e)
-        }
+        val metas = MetadataApi.searchAll(query)
+        metas.map { meta ->
+            SearchResultItem(
+                youtubeId = "",  // sin ID de YouTube: se reproducirá vía preview/local si procede
+                title = meta.title ?: query,
+                artist = meta.artist ?: "Desconocido",
+                durationMs = meta.durationMs,
+                artworkUrl = meta.artworkUrl
+            )
+        }.take(25)
     }
 
     // ---------------------------------------------------------------- Resolución NewPipe
 
     /**
-     * Extrae el stream de audio de un video de YouTube con reintentos y backoff.
-     * La URL resultante caduca; [streamExpiresAt] indica cuándo renovar.
+     * Extrae el stream de audio de un video (YouTube o URL directa) con reintentos y backoff.
+     * La URL resultante caduca; [ResolvedStream.expiresAt] indica cuándo renovar.
      */
-    suspend fun resolveStream(youtubeId: String, attempts: Int = 3): ResolvedStream =
+    suspend fun resolveStream(urlOrId: String, attempts: Int = 3): ResolvedStream =
         withContext(Dispatchers.IO) {
+            val url = if (urlOrId.startsWith("http")) urlOrId
+                      else "https://www.youtube.com/watch?v=$urlOrId"
             var lastError: Exception? = null
             for (attempt in 1..attempts) {
                 try {
-                    val info = org.schabi.newpipe.extractor.stream.StreamInfo
-                        .fromURL("https://www.youtube.com/watch?v=$youtubeId")
-                    // Preferir streams "audio only" (menor ancho de banda, sin video)
+                    val info = StreamInfo.getRemoteInstance(NewPipe.getService(0), url).fetchAndCommit()
                     val stream = info.audioStreams.sortedByDescending { it.bitrate }.firstOrNull()
                         ?: info.videoStreams.sortedBy { it.bitrate }.firstOrNull()
                         ?: throw ExtractionException("Sin streams disponibles")
@@ -178,10 +170,10 @@ class Repository @Inject constructor(
                 } catch (e: Exception) {
                     lastError = e
                     // Backoff exponencial simple: 1 s, 2 s, 4 s
-                    kotlinx.coroutines.delay(1000L shl (attempt - 1))
+                    delay(1000L shl (attempt - 1))
                 }
             }
-            throw lastError ?: ExtractionException("No se pudo resolver $youtubeId")
+            throw lastError ?: ExtractionException("No se pudo resolver $urlOrId")
         }
 
     // ---------------------------------------------------------------- Archivos locales

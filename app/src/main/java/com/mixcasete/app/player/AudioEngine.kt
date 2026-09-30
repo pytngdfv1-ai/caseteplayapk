@@ -227,12 +227,18 @@ class AudioEngine @Inject constructor(
         // Equilibrado L/R por balance y realce de agudos por tono mediante
         // un Equalizer del sistema si está disponible (fallback silencioso).
         try {
-            val eq = android.media.audiofx.Equalizer(null, 0, p.audioSessionId)
-            val range = eq.getBandLevelRange()
-            if (range != null && range.size >= 2) {
-                val mid = ((range[1].toInt() - range[0].toInt()) / 2)
-                val band = eq.numberOfBands.toIntOrNull()?.minus(1) ?: 0
-                eq.setBandLevel(band.toShort(), (range[0] + mid + tone * 100).toShort())
+            val eq = android.media.audiofx.Equalizer(0, p.audioSessionId)
+            val range = eq.bandLevelRange // ShortArray [min, max]
+            if (range.size >= 2) {
+                val min = range[0].toInt()
+                val max = range[1].toInt()
+                val mid = (min + max) / 2
+                val bandCount = eq.numberOfBands.toInt()
+                if (bandCount > 0) {
+                    // "tono" = realce de agudos sobre la última banda
+                    val level = (mid + tone * ((max - min) / 20)).coerceIn(min, max).toShort()
+                    eq.setBandLevel((bandCount - 1).toShort(), level)
+                }
             }
             eq.enabled = true
         } catch (_: Exception) {

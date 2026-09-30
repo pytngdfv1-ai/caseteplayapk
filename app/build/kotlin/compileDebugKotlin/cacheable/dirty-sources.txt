@@ -1,0 +1,12 @@
+/workspace/app/src/main/java/com/mixcasete/app/util/MetadataApi.kt
+/workspace/app/src/main/java/com/mixcasete/app/di/AppModule.kt
+/workspace/app/src/main/java/com/mixcasete/app/ui/skin/SkinLayout.kt
+/workspace/app/src/main/java/com/mixcasete/app/player/PlaybackService.kt
+/workspace/app/src/main/java/com/mixcasete/app/data/Models.kt
+/workspace/app/src/main/java/com/mixcasete/app/data/db/AppDatabase.kt
+/workspace/app/src/main/java/com/mixcasete/app/data/Repository.kt
+/workspace/app/src/main/java/com/mixcasete/app/player/AudioEngine.kt
+/workspace/app/src/main/java/com/mixcasete/app/ui/skin/CalibrationOverlay.kt
+/workspace/app/src/main/java/com/mixcasete/app/util/SettingsStore.kt
+/workspace/app/src/main/java/com/mixcasete/app/player/PlayerViewModel.kt
+/workspace/app/src/main/java/com/mixcasete/app/MixCaseteApp.kt

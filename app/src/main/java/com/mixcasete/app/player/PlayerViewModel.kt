@@ -174,14 +174,14 @@ class PlayerViewModel @Inject constructor(
 
     fun pause() {
         engine.pause()
-        ytCommand?.invoke(_ui.value.currentTrack?.youtubeId, play = false, seekMs = null)
+        ytCommand?.invoke(_ui.value.currentTrack?.youtubeId, false, null)
         _ui.value = _ui.value.copy(isPlaying = false)
     }
 
     fun resume() {
         val st = _ui.value
         when (st.source) {
-            SourceKind.YOUTUBE_IFRAME -> ytCommand?.invoke(st.currentTrack?.youtubeId, play = true, seekMs = null)
+            SourceKind.YOUTUBE_IFRAME -> ytCommand?.invoke(st.currentTrack?.youtubeId, true, null)
             else -> engine.resume()
         }
         _ui.value = st.copy(isPlaying = true)
@@ -189,7 +189,7 @@ class PlayerViewModel @Inject constructor(
 
     fun stopEject() {
         engine.stop()
-        ytCommand?.invoke(null, play = false, seekMs = null)
+        ytCommand?.invoke(null, false, null)
         _ui.value = _ui.value.copy(
             currentIndex = -1, isPlaying = false, lidOpen = true,
             positionMs = 0, durationMs = 0, source = null, error = null
@@ -431,7 +431,7 @@ class PlayerViewModel @Inject constructor(
         log("Watchdog: sin audio tras ${AudioEngine.SILENCE_TIMEOUT_MS / 1000} s")
         _ui.value = st.copy(error = "Sin audio: cambiando de fuente…")
         engine.stop()
-        ytCommand?.invoke(null, play = false, seekMs = null)
+        ytCommand?.invoke(null, false, null)
         tryNextSource(startFromFront = false)
         startNoAudioWatchdog()
     }

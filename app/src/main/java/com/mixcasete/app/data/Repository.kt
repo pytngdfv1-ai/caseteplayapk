@@ -1,0 +1,245 @@
+package com.mixcasete.app.data
+
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import com.mixcasete.app.data.db.TrackDao
+import com.mixcasete.app.data.db.TrackEntity
+import com.mixcasete.app.util.MetadataApi
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.StreamingService
+import org.schabi.newpipe.extractor.downloader.Downloader
+import org.schabi.newpipe.extractor.downloader.Request
+import org.schabi.newpipe.extractor.downloader.Response
+import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
+import org.schabi.newpipe.extractor.search.SearchExpressionCompiler
+import org.schabi.newpipe.extractor.search.SearchResult
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Resultado de una búsqueda para agregar pistas. */
+data class SearchResultItem(
+    val youtubeId: String,
+    val title: String,
+    val artist: String,
+    val durationMs: Long,
+    val artworkUrl: String?
+)
+
+/** Detalles resueltos por NewPipeExtractor para reproducir con ExoPlayer. */
+data class ResolvedStream(
+    val url: String,
+    val expiresAt: Long,
+    val title: String,
+    val artist: String,
+    val artworkUrl: String?,
+    val durationMs: Long
+)
+
+private class OkHttpDownloader : Downloader() {
+    override fun execute(request: Request): Response {
+        val conn = URL(request.url()).openConnection() as HttpURLConnection
+        request.headers().forEach { (k, v) -> conn.setRequestProperty(k, v.joinToString("; ")) }
+        conn.requestMethod = request.httpMethod()
+        conn.connectTimeout = 15000
+        conn.readTimeout = 15000
+        conn.instanceFollowRedirects = false
+        val bodyOut = request.dataToPut()
+        if (bodyOut != null) {
+            conn.doOutput = true
+            conn.outputStream.use { it.write(bodyOut) }
+        }
+        val code = conn.responseCode
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader()?.use { it.readText() } ?: ""
+        val headers = conn.headerFields.filterKeys { it != null }
+            .mapValues { it.value }
+        return Response(code, body, null, headers, request.url())
+    }
+}
+
+@Singleton
+class Repository @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val dao: TrackDao
+) {
+    init {
+        // Inicialización global del extractor (idempotente)
+        runCatching { NewPipe.init(OkHttpDownloader()) }
+    }
+
+    // ---------------------------------------------------------------- Lista
+
+    fun observeTracks(): Flow<List<Track>> = dao.observeAll().map { list ->
+        list.map {
+            Track(
+                id = it.id,
+                title = it.title,
+                artist = it.artist,
+                youtubeId = it.youtubeId,
+                localUri = it.localUri,
+                artworkUrl = it.artworkUrl,
+                durationMs = it.durationMs,
+                favorite = it.favorite
+            )
+        }
+    }
+
+    suspend fun addTrack(track: Track) = withContext(Dispatchers.IO) {
+        val pos = (dao.maxPosition() ?: 0) + 1
+        dao.insert(
+            TrackEntity(
+                id = track.id,
+                title = track.title,
+                artist = track.artist,
+                youtubeId = track.youtubeId,
+                localUri = track.localUri,
+                artworkUrl = track.artworkUrl,
+                durationMs = track.durationMs,
+                position = pos,
+                favorite = track.favorite
+            )
+        )
+    }
+
+    suspend fun removeTrack(id: String) = withContext(Dispatchers.IO) { dao.deleteById(id) }
+
+    /** Reordena la lista completa asignando posiciones secuenciales. */
+    suspend fun reorder(idsInOrder: List<String>) = withContext(Dispatchers.IO) {
+        idsInOrder.forEachIndexed { i, id -> dao.setPosition(id, i + 1) }
+    }
+
+    suspend fun setFavorite(id: String, fav: Boolean) = withContext(Dispatchers.IO) {
+        dao.setFavorite(id, fav)
+    }
+
+    // ---------------------------------------------------------------- Búsqueda
+
+    /**
+     * Busca en YouTube vía NewPipeExtractor (búsqueda ligera, sin extraer cada video).
+     */
+    suspend fun search(query: String): List<SearchResultItem> = withContext(Dispatchers.IO) {
+        try {
+            val service: StreamingService = NewPipe.getService(NewPipe.getServiceId("youtube"))
+            val handler: ListLinkHandler = service.searchFactory.fromQueryFilter(query, "all")
+            val result: SearchResult = service.searchFactory
+                .getSearchResult(SearchExpressionCompiler.compileQuery(handler))
+            result.items.filterIsInstance<org.schabi.newpipe.extractor.stream.StreamInfoItem>()
+                .mapNotNull { item ->
+                    val vid = item.url.substringAfterLast("v=").substringBefore("&")
+                    if (vid.isBlank() || vid.length < 11) null
+                    else SearchResultItem(
+                        youtubeId = vid.take(11),
+                        title = item.name,
+                        artist = item.uploaderName,
+                        durationMs = item.duration * 1000L,
+                        artworkUrl = item.thumbnails.firstOrNull()?.url
+                    )
+                }
+                .take(25)
+        } catch (e: Exception) {
+            throw ExtractionException("Búsqueda fallida", e)
+        }
+    }
+
+    // ---------------------------------------------------------------- Resolución NewPipe
+
+    /**
+     * Extrae el stream de audio de un video de YouTube con reintentos y backoff.
+     * La URL resultante caduca; [streamExpiresAt] indica cuándo renovar.
+     */
+    suspend fun resolveStream(youtubeId: String, attempts: Int = 3): ResolvedStream =
+        withContext(Dispatchers.IO) {
+            var lastError: Exception? = null
+            for (attempt in 1..attempts) {
+                try {
+                    val info = org.schabi.newpipe.extractor.stream.StreamInfo
+                        .fromURL("https://www.youtube.com/watch?v=$youtubeId")
+                    // Preferir streams "audio only" (menor ancho de banda, sin video)
+                    val stream = info.audioStreams.sortedByDescending { it.bitrate }.firstOrNull()
+                        ?: info.videoStreams.sortedBy { it.bitrate }.firstOrNull()
+                        ?: throw ExtractionException("Sin streams disponibles")
+                    return@withContext ResolvedStream(
+                        url = stream.content,
+                        expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L, // renovación a los 5 min
+                        title = info.name,
+                        artist = info.uploaderName,
+                        artworkUrl = info.thumbnails.firstOrNull()?.url,
+                        durationMs = info.duration * 1000L
+                    )
+                } catch (e: Exception) {
+                    lastError = e
+                    // Backoff exponencial simple: 1 s, 2 s, 4 s
+                    kotlinx.coroutines.delay(1000L shl (attempt - 1))
+                }
+            }
+            throw lastError ?: ExtractionException("No se pudo resolver $youtubeId")
+        }
+
+    // ---------------------------------------------------------------- Archivos locales
+
+    /** Agrega un archivo seleccionado con ACTION_OPEN_DOCUMENT. */
+    suspend fun addLocalFile(uri: Uri): Track = withContext(Dispatchers.IO) {
+        val name = queryDisplayName(uri) ?: "Pista local"
+        val (title, artist) = splitTitleArtist(name.removeSuffix(extensionOf(name)))
+        // Intentar completar metadatos/carátula desde iTunes/Deezer
+        val meta = runCatching { MetadataApi.search("$title $artist") }.getOrNull()
+        val track = Track(
+            id = "local-" + uri.toString().hashCode().toString(16),
+            title = meta?.title ?: title,
+            artist = meta?.artist ?: artist,
+            localUri = uri.toString(),
+            artworkUrl = meta?.artworkUrl,
+            durationMs = meta?.durationMs ?: 0L
+        )
+        addTrack(track)
+        track
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun extensionOf(name: String): String {
+        val dot = name.lastIndexOf('.')
+        return if (dot >= 0) name.substring(dot) else ""
+    }
+
+    private fun splitTitleArtist(name: String): Pair<String, String> {
+        val parts = name.split(" - ", limit = 2)
+        return if (parts.size == 2) parts[1].trim() to parts[0].trim() else name.trim() to "Desconocido"
+    }
+
+    // ---------------------------------------------------------------- Preview 30 s (último recurso)
+
+    /** Devuelve una pista de preview de 30 s desde iTunes/Deezer. El llamador debe avisar al usuario. */
+    suspend fun findPreview(title: String, artist: String): Track? = withContext(Dispatchers.IO) {
+        val meta = MetadataApi.search("$artist $title") ?: return@withContext null
+        val preview = meta.previewUrl ?: return@withContext null
+        Track(
+            id = "preview-" + preview.hashCode().toString(16),
+            title = meta.title ?: title,
+            artist = meta.artist ?: artist,
+            streamUrl = preview,
+            streamExpiresAt = Long.MAX_VALUE, // los previews no caducan rápido
+            artworkUrl = meta.artworkUrl,
+            durationMs = 30_000L,
+            isPreview = true
+        )
+    }
+}

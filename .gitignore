@@ -1,2 +1,6 @@
-# Gradle
 .gradle/
+build/
+local.properties
+*.jks
+.idea/
+*.log

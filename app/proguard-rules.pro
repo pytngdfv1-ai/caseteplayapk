@@ -6,4 +6,8 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.annotation.**
+# Rhino (transitivo de NewPipeExtractor): clases de escritorio no presentes en Android
+-dontwarn java.beans.**
+-dontwarn javax.script.**
+-dontwarn org.mozilla.javascript.**
 -keepattributes *Annotation*, InnerClasses, Signature

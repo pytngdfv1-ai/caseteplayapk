@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -127,7 +128,7 @@ class TvPresentationActivity : ComponentActivity() {
      * Bucle de sincronización teléfono -> TV: cada 500 ms pide el estado actual al
      * ViewModel (a través del bus) y lo aplica en el IFrame de la pantalla externa.
      */
-    private suspend fun collectLoop(web: WebView) {
+    private suspend fun CoroutineScope.collectLoop(web: WebView) {
         while (isActive) {
             if (TvShareBus.consumeStop()) {
                 runCatching { finish() }

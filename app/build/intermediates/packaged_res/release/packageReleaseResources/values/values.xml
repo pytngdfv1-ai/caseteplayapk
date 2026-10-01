@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="ic_launcher_background">#F3EFE4</color>
-    <string name="app_name">Mix.Casete</string>
-    <string name="channel_desc">Controles de música en segundo plano</string>
-    <string name="channel_name">Reproducción de Mix.Casete</string>
-    <style name="Theme.MixCasete" parent="android:Theme.Material.Light.NoActionBar"/>
-</resources>

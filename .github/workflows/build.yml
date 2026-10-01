@@ -33,19 +33,31 @@ jobs:
 
       # Si los secretos existen, se decodifica el keystore y el APK sale FIRMADO.
       # Sin secretos, la release se compila con la firma de debug (solo demostración).
-      - name: Decode keystore from secrets
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+      - name: Decode keystore from secrets (or generate a temporary one)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           mkdir -p app/keystore
-          echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/mixcasete.jks
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/mixcasete.jks
+            echo "Keystore decodificado desde secretos."
+          else
+            echo "::warning::No se encontro el secreto KEYSTORE_BASE64. Generando keystore temporal de CI (APK valido para pruebas, no para Play Store)."
+            keytool -genkeypair -v \
+              -keystore app/keystore/mixcasete.jks \
+              -alias mixcasete -keyalg RSA -keysize 2048 -validity 365 \
+              -storepass ci-temp-password -keypass ci-temp-password \
+              -dname "CN=MixCasete-CI, OU=CI, O=GitHub Actions, L=Cloud, ST=Cloud, C=US"
+            echo "KEY_ALIAS_FALLBACK=mixcasete" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD_FALLBACK=ci-temp-password" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD_FALLBACK=ci-temp-password" >> "$GITHUB_ENV"
+          fi
 
       - name: Assemble release
         env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS != '' && secrets.KEY_ALIAS || env.KEY_ALIAS_FALLBACK }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD != '' && secrets.KEY_PASSWORD || env.KEY_PASSWORD_FALLBACK }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD != '' && secrets.STORE_PASSWORD || env.STORE_PASSWORD_FALLBACK }}
         run: chmod +x ./gradlew && ./gradlew --no-daemon assembleRelease
 
       - name: Upload release APK

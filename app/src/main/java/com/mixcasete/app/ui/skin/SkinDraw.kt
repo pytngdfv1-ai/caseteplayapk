@@ -259,7 +259,7 @@ private fun DrawScope.drawWindowAndKeys(
 
     // fila de ranuras bajo la ventana
     run {
-        val sr = slotsZone.toRect(w, h)
+        val sr = slotsZone
         val n = 8
         val gap = sr.width / (n * 2f - 1f)
         for (i in 0 until n) {

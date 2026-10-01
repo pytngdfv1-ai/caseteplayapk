@@ -45,6 +45,15 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Actividad que se muestra en la pantalla externa (TV): solo video, sin controles -->
+        <activity
+            android:name=".ui.TvPresentationActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:excludeFromRecents="true" />
+
     </application>
 
 </manifest>

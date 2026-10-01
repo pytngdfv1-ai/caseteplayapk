@@ -8,7 +8,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -16,7 +15,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.mixcasete.app.ui.theme.AccentAmber
 import com.mixcasete.app.ui.theme.InkBlack
 import com.mixcasete.app.ui.theme.Paper
-import com.mixcasete.app.ui.theme.ScreenGreen
 import kotlin.math.cos
 import kotlin.math.sin
 

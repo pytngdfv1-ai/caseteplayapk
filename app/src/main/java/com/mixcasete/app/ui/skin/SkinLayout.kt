@@ -2,7 +2,6 @@ package com.mixcasete.app.ui.skin
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio

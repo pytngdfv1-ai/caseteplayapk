@@ -1,33 +1,21 @@
 package com.mixcasete.app.ui
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Build
-import android.view.Display
-import android.view.WindowManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,18 +32,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalConfiguration
@@ -65,14 +51,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.toSize
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mixcasete.app.MainActivity
 import com.mixcasete.app.player.PlayerViewModel
 import com.mixcasete.app.ui.skin.SkinCanvas
 import com.mixcasete.app.ui.skin.SkinLayout
@@ -80,7 +62,6 @@ import com.mixcasete.app.ui.skin.CalibrationOverlay
 import com.mixcasete.app.ui.skin.ScaledCanvas
 import com.mixcasete.app.ui.theme.ScreenGreen
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -121,7 +102,7 @@ fun CassetteApp(onToggleImmersive: (Boolean) -> Unit) {
         PlayerSkin(vm = vm, ui = ui, portrait = portrait, onClick = { click() })
 
         // Hoja inferior con la lista (vertical) / panel lateral (horizontal)
-        PlaylistSheet(vm = ui.let { vm }, visible = ui.showPlaylist, onDismiss = vm::hidePlaylist, portrait = portrait)
+        PlaylistSheet(vm = vm, visible = ui.showPlaylist, onDismiss = vm::hidePlaylist, portrait = portrait)
 
         // Avisos / errores sobre la mini pantalla
         LaunchedEffect(ui.error, ui.notice) { delay(4500) }
@@ -288,7 +269,8 @@ private fun ZoneTouch(zone: SkinLayout.Zone, onTap: () -> Unit) {
             .fillMaxSize()
             .pointerInput(zone) {
                 detectTapGestures { pos ->
-                    if (zoneRect(zone, size.toSize()).contains(pos)) onTap()
+                    val canvasSize = Size(size.width.toFloat(), size.height.toFloat())
+                    if (zoneRect(zone, canvasSize).contains(pos)) onTap()
                 }
             }
     )
@@ -309,7 +291,8 @@ private fun TouchGrid(
             .pointerInput(zone, columns, rows) {
                 detectTapGestures(
                     onPress = { pos ->
-                        val r = zoneRect(zone, size.toSize())
+                        val canvasSize = Size(size.width.toFloat(), size.height.toFloat())
+                        val r = zoneRect(zone, canvasSize)
                         if (!r.contains(pos)) return@detectTapGestures
                         val col = (((pos.x - r.left) / r.width) * columns).toInt().coerceIn(0, columns - 1)
                         val row = (((pos.y - r.top) / r.height) * rows).toInt().coerceIn(0, rows - 1)
@@ -333,7 +316,8 @@ private fun KnobTouch(zone: SkinLayout.Zone, onDelta: (Float) -> Unit, container
             .pointerInput(zone) {
                 detectDragGestures(
                     onDrag = { change, drag ->
-                        val r = zoneRect(zone, size.toSize())
+                        val canvasSize = Size(size.width.toFloat(), size.height.toFloat())
+                        val r = zoneRect(zone, canvasSize)
                         if (r.contains(change.position)) {
                             // desplazamiento vertical -> delta normalizado
                             onDelta(-drag.y / (size.height * 0.6f))
@@ -352,7 +336,8 @@ private fun MiniScreenTouch(zone: SkinLayout.Zone, onRepeat: () -> Unit, onShuff
             .fillMaxSize()
             .pointerInput(zone) {
                 detectTapGestures { pos ->
-                    val r = zoneRect(zone, size.toSize())
+                    val canvasSize = Size(size.width.toFloat(), size.height.toFloat())
+                    val r = zoneRect(zone, canvasSize)
                     if (!r.contains(pos)) return@detectTapGestures
                     val third = r.width / 3f
                     when {

@@ -11,10 +11,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.mixcasete.app.player.PlayerViewModel
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import kotlinx.coroutines.withContext
 
 /** HTML del IFrame oficial de YouTube (librería youtube-player IFrame API vía WebView). */
 private const val YT_HTML = """
@@ -59,10 +60,7 @@ window.AndroidBridge={ onState:function(p,pos,dur,err){
 class YouTubePlayerWebView internal constructor()
 
 @SuppressLint("SetJavaScriptEnabled")
-@AndroidEntryPoint
 class TvPresentationActivity : ComponentActivity() {
-
-    @Inject lateinit var vm: PlayerViewModel
 
     private var presentation: Presentation? = null
 
@@ -110,7 +108,7 @@ class TvPresentationActivity : ComponentActivity() {
     private fun parseState(json: String) {
         try {
             val o = org.json.JSONObject(json)
-            vm.onYouTubeState(
+            TvShareBus.reportState(
                 playing = o.optBoolean("playing"),
                 positionMs = o.optLong("pos"),
                 durationMs = o.optLong("dur"),
@@ -125,24 +123,32 @@ class TvPresentationActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Bucle de sincronización teléfono -> TV: cada 500 ms pide el estado actual al
+     * ViewModel (a través del bus) y lo aplica en el IFrame de la pantalla externa.
+     */
     private suspend fun collectLoop(web: WebView) {
-        vm.ui.collect { st ->
-            val v = st.currentTrack?.youtubeId ?: ""
-            val js = "cmd({v:'$v',play:${st.isPlaying},seekMs:null})"
-            web.evaluateJavascript(js, null)
+        while (isActive) {
+            if (TvShareBus.consumeStop()) {
+                runCatching { finish() }
+                return
+            }
+            val snap = TvShareBus.snapshotOrNull()
+            if (snap != null) {
+                val v = snap.youtubeId ?: ""
+                val js = "cmd({v:'$v',play:${snap.playing},seekMs:null})"
+                withContext(Dispatchers.Main) { web.evaluateJavascript(js, null) }
+            }
+            delay(500)
         }
     }
 
     override fun onDestroy() {
         runCatching { presentation?.dismiss() }
         presentation = null
-        MainActivitySharingOff()
-        super.onDestroy()
-    }
-
-    private fun MainActivitySharingOff() {
         com.mixcasete.app.MainActivity.sharingActive = false
-        vm.setSharing(false)
+        TvShareBus.activityStopped()
+        super.onDestroy()
     }
 }
 

@@ -33,9 +33,6 @@ class YouTubeLoginActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val cm = CookieManager.getInstance()
-        cm.setAcceptCookie(true)
-
         var loggedIn by mutableStateOf(false)
 
         setContent {
@@ -52,6 +49,8 @@ class YouTubeLoginActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth().weight(1f),
                             factory = { ctx ->
                                 WebView(ctx).apply {
+                                    val cm = CookieManager.getInstance()
+                                    cm.setAcceptCookie(true)
                                     settings.javaScriptEnabled = true
                                     settings.domStorageEnabled = true
                                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)

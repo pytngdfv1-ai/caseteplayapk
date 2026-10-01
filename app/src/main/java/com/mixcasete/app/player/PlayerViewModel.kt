@@ -70,7 +70,17 @@ class PlayerViewModel @Inject constructor(
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
 
     /** El WebView de YouTube expuesto en la UI; el ViewModel lo pilota vía este callback. */
-    var ytCommand: ((youtubeId: String?, play: Boolean, seekMs: Long?) -> Unit)? = null
+    var ytCommand: YtCommand? = null
+
+    /** Comando tipado para controlar el IFrame de YouTube desde la UI. */
+    fun interface YtCommand {
+        /**
+         * @param youtubeId video a cargar (null = detener).
+         * @param play true para reproducir, false para pausar.
+         * @param seekMs posición inicial/objetivo en ms, o null para continuar.
+         */
+        fun send(youtubeId: String?, play: Boolean, seekMs: Long?)
+    }
 
     /** Estado "playing" reportado por el IFrame de YouTube (para los carretes). */
     private val _ytPlaying = MutableStateFlow(false)
@@ -134,10 +144,11 @@ class PlayerViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
-        // Callback de renovación de URL caducada
+        // Callback de renovación de URL caducada (re-extrae una URL fresca con reintentos)
         engine.streamRefresher = { track ->
-            val id = track.youtubeId ?: return@streamRefresher null
-            runCatching { repo.resolveStream(id).url }.getOrNull()
+            val key = track.youtubeId ?: track.streamUrl
+            if (key == null) null
+            else runCatching { repo.resolveStream(key).url }.getOrNull()
         }
     }
 
@@ -174,14 +185,14 @@ class PlayerViewModel @Inject constructor(
 
     fun pause() {
         engine.pause()
-        ytCommand?.invoke(_ui.value.currentTrack?.youtubeId, false, null)
+        ytCommand?.send(_ui.value.currentTrack?.youtubeId, false, null)
         _ui.value = _ui.value.copy(isPlaying = false)
     }
 
     fun resume() {
         val st = _ui.value
         when (st.source) {
-            SourceKind.YOUTUBE_IFRAME -> ytCommand?.invoke(st.currentTrack?.youtubeId, true, null)
+            SourceKind.YOUTUBE_IFRAME -> ytCommand?.send(st.currentTrack?.youtubeId, true, null)
             else -> engine.resume()
         }
         _ui.value = st.copy(isPlaying = true)
@@ -189,7 +200,7 @@ class PlayerViewModel @Inject constructor(
 
     fun stopEject() {
         engine.stop()
-        ytCommand?.invoke(null, false, null)
+        ytCommand?.send(null, false, null)
         _ui.value = _ui.value.copy(
             currentIndex = -1, isPlaying = false, lidOpen = true,
             positionMs = 0, durationMs = 0, source = null, error = null
@@ -225,7 +236,7 @@ class PlayerViewModel @Inject constructor(
 
     fun seekTo(ms: Long) {
         when (_ui.value.source) {
-            SourceKind.YOUTUBE_IFRAME -> ytCommand?.invoke(_ui.value.currentTrack?.youtubeId, play = true, seekMs = ms)
+            SourceKind.YOUTUBE_IFRAME -> ytCommand?.send(_ui.value.currentTrack?.youtubeId, true, ms)
             else -> engine.seekTo(ms)
         }
         _ui.value = _ui.value.copy(positionMs = ms)
@@ -353,7 +364,7 @@ class PlayerViewModel @Inject constructor(
         when (next) {
             SourceKind.YOUTUBE_IFRAME -> {
                 _ui.value = _ui.value.copy(source = next)
-                ytCommand?.invoke(track.youtubeId, play = true, seekMs = null)
+                ytCommand?.send(track.youtubeId, true, null)
             }
             SourceKind.NEWPIPE -> viewModelScope.launch {
                 val id = track.youtubeId
@@ -431,7 +442,7 @@ class PlayerViewModel @Inject constructor(
         log("Watchdog: sin audio tras ${AudioEngine.SILENCE_TIMEOUT_MS / 1000} s")
         _ui.value = st.copy(error = "Sin audio: cambiando de fuente…")
         engine.stop()
-        ytCommand?.invoke(null, false, null)
+        ytCommand?.send(null, false, null)
         tryNextSource(startFromFront = false)
         startNoAudioWatchdog()
     }

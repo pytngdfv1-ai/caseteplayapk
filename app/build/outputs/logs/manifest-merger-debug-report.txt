@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /workspace/app/src/main/AndroidManifest.xml:2:1-49:12
-INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-49:12
-INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-49:12
-INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-49:12
+ADDED from /workspace/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/app/src/main/AndroidManifest.xml:2:1-50:12
 MERGED from [androidx.media3:media3-session:1.4.1] /root/.gradle/caches/transforms-4/18e28a3cb9949afb53c97f17342a6776/transformed/media3-session-1.4.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.media3:media3-ui:1.4.1] /root/.gradle/caches/transforms-4/5e2d2703f69afb1674558a5fdf29e0a0/transformed/media3-ui-1.4.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.media3:media3-extractor:1.4.1] /root/.gradle/caches/transforms-4/1014b90bdfe8d0078e4b952581c594ee/transformed/media3-extractor-1.4.1/AndroidManifest.xml:17:1-22:12
@@ -125,8 +125,8 @@ ADDED from /workspace/app/src/main/AndroidManifest.xml:8:5-68
 	android:name
 		ADDED from /workspace/app/src/main/AndroidManifest.xml:8:22-65
 application
-ADDED from /workspace/app/src/main/AndroidManifest.xml:10:5-47:19
-INJECTED from /workspace/app/src/main/AndroidManifest.xml:10:5-47:19
+ADDED from /workspace/app/src/main/AndroidManifest.xml:10:5-48:19
+INJECTED from /workspace/app/src/main/AndroidManifest.xml:10:5-48:19
 MERGED from [androidx.compose.ui:ui-tooling-android:1.6.8] /root/.gradle/caches/transforms-4/a3f6b70ff6896c265f03707a3a8f85f5/transformed/ui-tooling-release/AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.compose.ui:ui-tooling-android:1.6.8] /root/.gradle/caches/transforms-4/a3f6b70ff6896c265f03707a3a8f85f5/transformed/ui-tooling-release/AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/transforms-4/cf506a8f8a7627268fc6599dfef5a644/transformed/emoji2-1.3.0/AndroidManifest.xml:23:5-33:19
@@ -148,63 +148,65 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /root/.gradle/caches/transf
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] /root/.gradle/caches/transforms-4/0061b0bb23e0f95b45beaac9849bbcdf/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:15:9-35
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:16:9-35
 	android:label
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:14:9-41
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:15:9-41
+	android:roundIcon
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:14:9-54
 	android:icon
 		ADDED from /workspace/app/src/main/AndroidManifest.xml:13:9-43
 	android:allowBackup
 		ADDED from /workspace/app/src/main/AndroidManifest.xml:12:9-35
 	android:theme
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:17:9-47
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:18:9-47
 	android:networkSecurityConfig
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:16:9-69
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:17:9-69
 	android:name
 		ADDED from /workspace/app/src/main/AndroidManifest.xml:11:9-37
 activity#com.mixcasete.app.MainActivity
-ADDED from /workspace/app/src/main/AndroidManifest.xml:19:9-29:20
+ADDED from /workspace/app/src/main/AndroidManifest.xml:20:9-30:20
 	android:launchMode
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:22:13-44
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:23:13-44
 	android:exported
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:21:13-36
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:22:13-36
 	android:configChanges
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:23:13-121
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:24:13-121
 	android:theme
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:24:13-51
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:25:13-51
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:20:13-41
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:21:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /workspace/app/src/main/AndroidManifest.xml:25:13-28:29
+ADDED from /workspace/app/src/main/AndroidManifest.xml:26:13-29:29
 action#android.intent.action.MAIN
-ADDED from /workspace/app/src/main/AndroidManifest.xml:26:17-69
+ADDED from /workspace/app/src/main/AndroidManifest.xml:27:17-69
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:26:25-66
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:27:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /workspace/app/src/main/AndroidManifest.xml:27:17-77
+ADDED from /workspace/app/src/main/AndroidManifest.xml:28:17-77
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:27:27-74
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:28:27-74
 service#com.mixcasete.app.player.PlaybackService
-ADDED from /workspace/app/src/main/AndroidManifest.xml:32:9-39:19
+ADDED from /workspace/app/src/main/AndroidManifest.xml:33:9-40:19
 	android:exported
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:34:13-36
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:35:13-36
 	android:foregroundServiceType
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:35:13-58
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:36:13-58
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:33:13-51
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:34:13-51
 intent-filter#action:name:androidx.media3.session.MediaSessionService
-ADDED from /workspace/app/src/main/AndroidManifest.xml:36:13-38:29
+ADDED from /workspace/app/src/main/AndroidManifest.xml:37:13-39:29
 action#androidx.media3.session.MediaSessionService
-ADDED from /workspace/app/src/main/AndroidManifest.xml:37:17-86
+ADDED from /workspace/app/src/main/AndroidManifest.xml:38:17-86
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:37:25-83
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:38:25-83
 activity#com.mixcasete.app.ui.YouTubeLoginActivity
-ADDED from /workspace/app/src/main/AndroidManifest.xml:42:9-45:77
+ADDED from /workspace/app/src/main/AndroidManifest.xml:43:9-46:77
 	android:exported
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:44:13-37
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:45:13-37
 	android:configChanges
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:45:13-74
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:46:13-74
 	android:name
-		ADDED from /workspace/app/src/main/AndroidManifest.xml:43:13-52
+		ADDED from /workspace/app/src/main/AndroidManifest.xml:44:13-52
 uses-sdk
 INJECTED from /workspace/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /workspace/app/src/main/AndroidManifest.xml

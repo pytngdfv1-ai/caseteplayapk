@@ -17,6 +17,7 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.localization.Localization
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.net.HttpURLConnection
@@ -58,12 +59,14 @@ private class HttpDownloader : Downloader() {
             conn.outputStream.use { it.write(body) }
         }
         val code = conn.responseCode
+        val message = try { conn.responseMessage } catch (_: Exception) { "" }
         val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
             ?.bufferedReader()?.use { it.readText() } ?: ""
         val headers = conn.headerFields
             .filterKeys { it != null }
             .mapValues { e -> e.value ?: listOf() }
-        return Response(code, text, null, headers, request.url())
+        // Firma real en v0.24.8: Response(int, String?, Map, String?, String?)
+        return Response(code, message, headers, text, request.url())
     }
 }
 
@@ -74,7 +77,12 @@ class Repository @Inject constructor(
 ) {
     init {
         // Inicialización global del extractor (idempotente)
-        runCatching { NewPipe.init(HttpDownloader(), "all") }
+        runCatching { NewPipe.init(HttpDownloader(), Localization.DEFAULT) }
+    }
+
+    /** Búsqueda de streams de YouTube vía NewPipeExtractor (usando la API pública de metadatos). */
+    private val ytService by lazy {
+        runCatching { NewPipe.getService("YouTube") }.getOrNull()
     }
 
     // ---------------------------------------------------------------- Lista
@@ -146,7 +154,8 @@ class Repository @Inject constructor(
 
     /**
      * Extrae el stream de audio de un video (YouTube o URL directa) con reintentos y backoff.
-     * La URL resultante caduca; [ResolvedStream.expiresAt] indica cuándo renovar.
+     * La URL resultante caduca; [ResolvedStream.expiresAt] indica cuándo renovar
+     * (se vuelve a llamar a este método, que re-extrae una URL fresca).
      */
     suspend fun resolveStream(urlOrId: String, attempts: Int = 3): ResolvedStream =
         withContext(Dispatchers.IO) {
@@ -155,7 +164,7 @@ class Repository @Inject constructor(
             var lastError: Exception? = null
             for (attempt in 1..attempts) {
                 try {
-                    val info = StreamInfo.getRemoteInstance(NewPipe.getService(0), url).fetchAndCommit()
+                    val info = StreamInfo.getInfo(url)
                     val stream = info.audioStreams.sortedByDescending { it.bitrate }.firstOrNull()
                         ?: info.videoStreams.sortedBy { it.bitrate }.firstOrNull()
                         ?: throw ExtractionException("Sin streams disponibles")

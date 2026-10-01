@@ -21,6 +21,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,8 +61,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mixcasete.app.MainActivity
@@ -84,7 +91,7 @@ fun CassetteApp(onToggleImmersive: (Boolean) -> Unit) {
     val context = LocalContext.current
     val clicker = remember { MediaPlayer().apply {
         runCatching {
-            setDataSource(context, Uri.parse("android.resource://${context.packageName}/${com.mixcasete.app.R.raw.key_click}"))
+            setDataSource(context, Uri.parse("android.resource://${context.packageName}/raw/key_click"))
             prepare()
         }
     } }
@@ -216,9 +223,9 @@ private fun PlayerSkin(
 
             // Perillas táctiles: volumen / tono / balance (deslizar vertical)
             val knobZones = if (portrait) SkinLayout.knobs else SkinLayout.lKnobs
-            KnobTouch(zone = knobZones[0], onDelta = { d -> vm.adjustVolume(d) }, container = true)
-            KnobTouch(zone = knobZones[1], onDelta = { d -> vm.adjustTone(d.toInt()) }, container = true)
-            KnobTouch(zone = knobZones[2], onDelta = { d -> vm.adjustBalance(d.toInt()) }, container = true)
+            KnobTouch(zone = knobZones[0], onDelta = { d -> vm.setVolume((ui.volume + d).coerceIn(0f, 1f)) }, container = true)
+            KnobTouch(zone = knobZones[1], onDelta = { d -> vm.setTone((ui.tone + (d * 60f).roundToInt()).coerceIn(-50, 50)) }, container = true)
+            KnobTouch(zone = knobZones[2], onDelta = { d -> vm.setBalance((ui.balance + (d * 60f).roundToInt()).coerceIn(-50, 50)) }, container = true)
 
             // Toques en la franja: repetir/aleatorio/favoritos en la mini pantalla
             val screenZone = if (portrait) SkinLayout.miniScreen else SkinLayout.lMiniScreen
@@ -231,7 +238,7 @@ private fun PlayerSkin(
 
             // EJECT: tocar la tapa/ventana expulsa e inserta
             val windowZone = if (portrait) SkinLayout.window else SkinLayout.lWindow
-            ZoneTouch(zone = windowZone, onTap = { onClick(); vm.toggleLidOrEject() })
+            ZoneTouch(zone = windowZone, onTap = { onClick(); vm.toggleLid() })
 
             // Texto de la etiqueta del casete (título/artista) encima del dibujo
             TapeLabel(
@@ -255,7 +262,7 @@ private fun PlayerSkin(
 
 // ---------------------------------------------------------------- Utilidades de zonas táctiles
 
-private fun zoneRect(zone: SkinLayout.Zone, full: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Rect =
+private fun zoneRect(zone: SkinLayout.Zone, full: IntSize): androidx.compose.ui.geometry.Rect =
     androidx.compose.ui.geometry.Rect(
         zone.x * full.width, zone.y * full.height,
         (zone.x + zone.w) * full.width, (zone.y + zone.h) * full.height
@@ -290,7 +297,7 @@ private fun TouchGrid(
                 detectTapGestures(
                     onPress = { pos ->
                         val r = zoneRect(zone, size)
-                        if (!r.contains(pos)) return@onPress
+                        if (!r.contains(pos)) return@detectTapGestures
                         val col = (((pos.x - r.left) / r.width) * columns).toInt().coerceIn(0, columns - 1)
                         val row = (((pos.y - r.top) / r.height) * rows).toInt().coerceIn(0, rows - 1)
                         val idx = row * columns + col
@@ -311,18 +318,15 @@ private fun KnobTouch(zone: SkinLayout.Zone, onDelta: (Float) -> Unit, container
         Modifier
             .fillMaxSize()
             .pointerInput(zone) {
-                var lastY: Float? = null
                 detectDragGestures(
-                    onDragStart = { lastY = it.y },
                     onDrag = { change, drag ->
                         val r = zoneRect(zone, size)
-                        if (r.contains(change.position) || r.contains(Offset(lastY?.let { 0f } ?: 0f, 0f))) {
+                        if (r.contains(change.position)) {
                             // desplazamiento vertical -> delta normalizado
                             onDelta(-drag.y / (size.height * 0.6f))
                         }
-                        lastY = change.position.y
-                    },
-                    onDragEnd = { lastY = null }
+                        change.consume()
+                    }
                 )
             }
     )
@@ -348,40 +352,19 @@ private fun MiniScreenTouch(zone: SkinLayout.Zone, onRepeat: () -> Unit, onShuff
     )
 }
 
+/** Etiqueta del casete: título y artista, posicionados en fracciones dentro del lienzo escalado. */
 @Composable
 private fun TapeLabel(tapeZone: SkinLayout.Zone, title: String, artist: String, dark: Boolean) {
-    val (lx, ly) = SkinLayout.labelBandTapeFrac.first to SkinLayout.labelBandTapeFrac.second
-    val (lw, lh) = SkinLayout.labelBandTapeFrac.third.first to SkinLayout.labelBandTapeFrac.third.second
-    Box(
-        Modifier
-            .fillMaxSize()
-            .padding(0.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth(tapeZone.w * lw)
-                .padding(start = ((tapeZone.x + lx) / (tapeZone.w * lw).takeIf { false } ?: 1f).let { 0.dp })
-        ) {}
-    }
-    // Posicionamiento proporcional dentro del lienzo escalado
-    Box(Modifier.fillMaxSize()) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth(tapeZone.w * lw)
-                .align(Alignment.TopStart)
-                .offset(x = 0.dp, y = 0.dp)
-                .padding(
-                    start = ((tapeZone.x + lx) * 360).dp * 0f, // se resuelve con pesos relativos abajo
-                )
-        ) {}
-    }
-    // Solución simple: layout relativo con fillMaxWidth/fracciones del Box padre
-    androidx.compose.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    val lx = SkinLayout.labelBandTapeFrac.first
+    val ly = SkinLayout.labelBandTapeFrac.second
+    val lw = SkinLayout.labelBandTapeFrac.third.first
+    val lh = SkinLayout.labelBandTapeFrac.third.second
+    val textColor = if (dark) Color(0xFFEDE6D6) else Color(0xFF14120F)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val wPx = constraints.maxWidth.toFloat()
         val hPx = constraints.maxHeight.toFloat()
-        val r = zoneRect(tapeZone, androidx.compose.ui.geometry.Size(wPx, hPx))
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val r = zoneRect(tapeZone, IntSize(wPx.toInt(), hPx.toInt()))
         val labelLeft = r.left + lx * r.width
         val labelTop = r.top + ly * r.height
         val labelW = lw * r.width
@@ -390,44 +373,50 @@ private fun TapeLabel(tapeZone: SkinLayout.Zone, title: String, artist: String, 
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .offset(x = with(androidx.compose.ui.platform.LocalDensity.current) { labelLeft.toDp() })
-                .offset(y = with(androidx.compose.ui.platform.LocalDensity.current) { labelTop.toDp() })
-                .then(Modifier)
-                .let { it }
+                .offset(
+                    x = with(density) { labelLeft.toDp() },
+                    y = with(density) { labelTop.toDp() }
+                )
+                .width(with(density) { labelW.toDp() })
+                .height(with(density) { labelH.toDp() })
         ) {
             Text(
                 text = title, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
-                color = if (dark) Color(0xFFEDE6D6) else Color(0xFF14120F),
-                fontSize = min(labelW, labelH).toDp() * 0.22f,
+                color = textColor,
+                fontSize = min(with(density) { labelW.toDp() }, with(density) { labelH.toDp() }) * 0.22f,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.width(min(labelW.toDp(), maxWidth))
+                modifier = Modifier.fillMaxWidth()
             )
             Text(
                 text = artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontFamily = FontFamily.Monospace,
-                color = (if (dark) Color(0xFFEDE6D6) else Color(0xFF14120F)).copy(alpha = 0.75f),
-                fontSize = min(labelW, labelH).toDp() * 0.16f,
+                color = textColor.copy(alpha = 0.75f),
+                fontSize = min(with(density) { labelW.toDp() }, with(density) { labelH.toDp() }) * 0.16f,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.width(min(labelW.toDp(), maxWidth))
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
+/** Texto de aviso/error dentro de una zona (mini pantalla). */
 @Composable
 private fun ZoneText(zone: SkinLayout.Zone, text: String, color: Color) {
-    androidx.compose.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val r = zoneRect(zone, androidx.compose.ui.geometry.Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()))
+        val r = zoneRect(
+            zone,
+            IntSize(constraints.maxWidth, constraints.maxHeight)
+        )
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .offset(with(density) { r.left.toDp() }, with(density) { r.top.toDp() })
-                .size(with(density) { r.width.toDp() }, with(density) { r.height.toDp() * 0.5f })
+                .size(with(density) { r.width.toDp() }, with(density) { (r.height * 0.9f).toDp() })
         ) {
             Text(
-                text = text, color = color, fontSize = 9.sp, maxLines = 1,
+                text = text, color = color, fontSize = 9.sp, maxLines = 2,
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 modifier = Modifier
                     .clip(RoundedCornerShape(3.dp))

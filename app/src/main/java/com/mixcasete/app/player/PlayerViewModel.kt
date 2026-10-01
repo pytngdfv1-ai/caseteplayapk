@@ -40,6 +40,9 @@ data class PlayerUiState(
     val sharingToTv: Boolean = false,
     val calibration: Boolean = false,
     val ytLoggedIn: Boolean = false,
+    val showPlaylist: Boolean = false,
+    val seekCommandTick: Long = 0L,
+    val pendingSeekMs: Long = 0L,
     val debugLog: List<String> = emptyList()
 ) {
     val currentTrack: Track? get() = tracks.getOrNull(currentIndex)
@@ -235,6 +238,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekTo(ms: Long) {
+        _ui.value = _ui.value.copy(
+            pendingSeekMs = ms,
+            seekCommandTick = _ui.value.seekCommandTick + 1
+        )
         when (_ui.value.source) {
             SourceKind.YOUTUBE_IFRAME -> ytCommand?.send(_ui.value.currentTrack?.youtubeId, true, ms)
             else -> engine.seekTo(ms)
@@ -318,6 +325,32 @@ class PlayerViewModel @Inject constructor(
 
     fun removeTrack(id: String) {
         viewModelScope.launch { repo.removeTrack(id) }
+    }
+
+    /** Mover pista dentro de la lista: delta = -1 sube, +1 baja (reordenación persistida). */
+    fun moveTrack(index: Int, delta: Int) {
+        val list = _ui.value.tracks.toMutableList()
+        if (index !in list.indices) return
+        val to = index + delta
+        if (to !in list.indices) return
+        val cur = _ui.value.currentIndex
+        val item = list.removeAt(index)
+        list.add(to, item)
+        val newCur = when {
+            cur == index -> to
+            delta < 0 && cur == to -> cur + 1
+            delta > 0 && cur == to -> cur - 1
+            else -> cur
+        }
+        _ui.value = _ui.value.copy(tracks = list, currentIndex = newCur)
+        viewModelScope.launch { repo.reorder(list.map { it.id }) }
+    }
+
+    fun showPlaylist() { _ui.value = _ui.value.copy(showPlaylist = true) }
+    fun hidePlaylist() { _ui.value = _ui.value.copy(showPlaylist = false) }
+
+    fun notifyNoExternalDisplay() {
+        _ui.value = _ui.value.copy(notice = "No se detecta pantalla externa")
     }
 
     fun reorder(ids: List<String>) {

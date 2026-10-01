@@ -49,8 +49,11 @@ En tu repositorio: **Settings → Secrets and variables → Actions → New repo
 | `KEY_PASSWORD` | contraseña de la clave |
 | `STORE_PASSWORD` | contraseña del keystore |
 
-Si los secretos no existen, el workflow compila igualmente el release pero sin firmar
-(modo demostración).
+Si los secretos no existen, el workflow **genera automáticamente un keystore temporal
+de CI** (con `keytool`) y firma el APK con él: la compilación nunca falla por falta de
+secretos. Ese APK sirve para instalar y probar, pero no es válido para Play Store ni
+para actualizaciones futuras (la clave cambia en cada run). Para una firma permanente,
+configura los cuatro secretos de la tabla.
 
 ## Workflow de CI
 

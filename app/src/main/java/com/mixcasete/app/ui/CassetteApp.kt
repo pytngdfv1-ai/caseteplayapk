@@ -265,6 +265,12 @@ private fun PlayerSkin(
 private fun zoneRect(zone: SkinLayout.Zone, full: IntSize): androidx.compose.ui.geometry.Rect =
     androidx.compose.ui.geometry.Rect(
         zone.x * full.width, zone.y * full.height,
+
+// ---------------------------------------------------------------- Utilidades de zonas táctiles
+
+private fun zoneRect(zone: SkinLayout.Zone, full: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Rect =
+    androidx.compose.ui.geometry.Rect(
+        zone.x * full.width, zone.y * full.height,
         (zone.x + zone.w) * full.width, (zone.y + zone.h) * full.height
     )
 
